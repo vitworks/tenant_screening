@@ -1,5 +1,5 @@
 # tenant_screening
-Drupal custom module. Pulls Tenant Screening Articles from AAOA RSS as a nodes.
+Drupal 7 custom module. Pulls Tenant Screening Articles from AAOA RSS as a nodes.
 
 ## Install
 1. Downlod the zip file from github https://github.com/vitworks/tenant_screening
