@@ -1,0 +1,262 @@
+<?php
+/**
+ * @file
+ * Custom functionality for a Tenant Screening Advice Module.
+ */
+
+/**
+ * Implements hook_help().
+ */
+function tenant_screening_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#tenant_screening':{
+      $ret_val = '<h3>' . t('About') . '</h3>';
+      $ret_val = '<p>' . t('The Tenant Screening Advice module makes it easy to pull latest articles about tenant screening from AAOA.') . '</p>';
+      return $ret_val;
+      break;
+    }
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function tenant_screening_permission() {
+  return array(
+    'administer tenant screening advice' => array(
+      'title' => t('Administer Tenant Screening Advice'),
+      'description' => t('Perform administrative tasks on Tenant Screening Advice functionality'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function tenant_screening_menu() {
+  $items = array();
+
+  // Admin configuration group.
+  $items['admin/config/tenant_screening'] = array(
+    'title' => 'Tenant Screening Advice',
+    'description' => 'Administer Tenant Screening Advice',
+    'access arguments' => array('administer tenant screening advice'),
+  );
+
+  // Admin configuration - Settings.
+  $items['admin/config/tenant_screening/manage'] = array(
+    'title' => 'Tenant Screening Advice settings',
+    'description' => 'Shortcut to importing Tenant Screning Advice articles to nodes.',
+    'access arguments' => array('administer tenant screening advice'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('tenant_screening_admin_settings_form'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form().
+ */
+function tenant_screening_admin_settings_form($node, &$form_state) {
+  $form = array();
+
+  $form['overview'] = array(
+    '#markup' => t('This interface give administrators quick access to import latest articles'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['feed_url'] = array(
+    '#markup' => t('Copy Import URL below, you will need it when you click on the link below'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p><p>http://www.american-apartment-owners-association.org/property-management/tenant-screening/feed/</p>',
+  );
+
+  $form['feed_link'] = array(
+    '#markup' => t('Import Latest Tenant Screening Advice'),
+    '#prefix' => '<h3><a href="/import/tenant_screening_advices_feed">',
+    '#suffix' => '</a></h3>',
+  );
+
+  return system_settings_form($form);
+}
+
+
+
+/**
+ * Implements hook_form_alter().
+ */
+function tenant_screening_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'tenant_screening_node_form':{
+      $form['#validate'][] = 'tenant_screening_node_form_validate';
+      break;
+    }
+  }
+}
+
+/**
+ * Validates Source URL content type.
+ */
+function tenant_screening_node_form_validate($form, &$form_state) {
+  // Validate Source URL.
+  $source_url = $form_state['values']['tenant_screening_source'][LANGUAGE_NONE][0]['value'];
+  if (!_tenant_screening_validate_signed_degrees($source_url)) {
+    form_set_error('tenant_screening_source', t('Must use valid Source URL: ex. http://www.google.com'));
+  }
+
+}
+
+/**
+ * Determine if URL is valid format.
+ *
+ * @param string $value
+ *   The value to be tested.
+ *
+ * @return boolean
+ *   TRUE if correctly formatted.
+ */
+function _tenant_screening_validate_signed_degrees($value) {
+  return preg_match("
+      /^                                                      # Start at the beginning of the text
+      (?:ftp|https?|feed):\/\/                                # Look for ftp, http, https or feed schemes
+      (?:                                                     # Userinfo (optional) which is typically
+        (?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*      # a username or a username and password
+        (?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+@          # combination
+      )?
+      (?:
+        (?:[a-z0-9\-\.]|%[0-9a-f]{2})+                        # A domain name or a IPv4 address
+        |(?:\[(?:[0-9a-f]{0,4}:)*(?:[0-9a-f]{0,4})\])         # or a well formed IPv6 address
+      )
+      (?::[0-9]+)?                                            # Server port number (optional)
+      (?:[\/|\?]
+        (?:[\w#!:\.\?\+=&@$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})   # The path and query (optional)
+      *)?
+    $/xi", $value) ? TRUE : FALSE;
+}
+
+/**
+ * Implements hook_feeds_importer_default().
+ */
+function tenant_screening_feeds_importer_default() {
+  $export = array();
+
+  $feeds_importer = new stdClass();
+$feeds_importer->disabled = FALSE;
+$feeds_importer->api_version = 1;
+$feeds_importer->id = 'tenant_screening_advices_feed';
+$feeds_importer->config = array(
+  'name' => 'Tenant Screening Advices Feed',
+  'description' => 'RSS Feed on the topic of Tenant Screening from American Apartment Owners Association',
+  'fetcher' => array(
+    'plugin_key' => 'FeedsHTTPFetcher',
+    'config' => array(
+      'auto_detect_feeds' => FALSE,
+      'use_pubsubhubbub' => FALSE,
+      'designated_hub' => '',
+      'request_timeout' => NULL,
+      'auto_scheme' => 'http',
+      'accept_invalid_cert' => FALSE,
+    ),
+  ),
+  'parser' => array(
+    'plugin_key' => 'FeedsXPathParserXML',
+    'config' => array(
+      'sources' => array(
+        'xpathparser:0' => 'title',
+        'xpathparser:1' => 'content:encoded',
+        'xpathparser:2' => 'pubDate',
+        'xpathparser:3' => 'link',
+        'xpathparser:4' => 'contains(published, "No")',
+      ),
+      'rawXML' => array(
+        'xpathparser:0' => 0,
+        'xpathparser:1' => 0,
+        'xpathparser:2' => 0,
+        'xpathparser:3' => 0,
+        'xpathparser:4' => 0,
+      ),
+      'context' => '/rss/channel/item',
+      'exp' => array(
+        'errors' => 0,
+        'tidy' => 0,
+        'tidy_encoding' => 'UTF8',
+        'debug' => array(
+          'context' => 0,
+          'xpathparser:0' => 0,
+          'xpathparser:1' => 0,
+          'xpathparser:2' => 0,
+          'xpathparser:3' => 0,
+          'xpathparser:4' => 0,
+        ),
+      ),
+      'allow_override' => 1,
+    ),
+  ),
+  'processor' => array(
+    'plugin_key' => 'FeedsNodeProcessor',
+    'config' => array(
+      'expire' => '-1',
+      'author' => '1',
+      'authorize' => 0,
+      'mappings' => array(
+        0 => array(
+          'source' => 'xpathparser:0',
+          'target' => 'title',
+          'unique' => 1,
+          'language' => 'und',
+        ),
+        1 => array(
+          'source' => 'xpathparser:1',
+          'target' => 'body',
+          'unique' => FALSE,
+          'language' => 'und',
+        ),
+        2 => array(
+          'source' => 'xpathparser:2',
+          'target' => 'created',
+          'unique' => FALSE,
+          'language' => 'und',
+        ),
+        3 => array(
+          'source' => 'xpathparser:3',
+          'target' => 'tenant_screening_source',
+          'unique' => FALSE,
+          'language' => 'und',
+        ),
+        4 => array(
+          'source' => 'xpathparser:4',
+          'target' => 'status',
+          'unique' => FALSE,
+        ),
+      ),
+      'insert_new' => '1',
+      'update_existing' => '0',
+      'update_non_existent' => 'skip',
+      'input_format' => 'full_html',
+      'skip_hash_check' => 0,
+      'bundle' => 'tenant_screening',
+      'language' => 'und',
+    ),
+  ),
+  'content_type' => '',
+  'update' => 0,
+  'import_period' => '-1',
+  'expire_period' => 3600,
+  'import_on_create' => 1,
+  'process_in_background' => 0,
+);
+
+  $export['openei_wind_farms'] = $feeds_importer;
+  return $export;
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function tenant_screening_ctools_plugin_api($module = '', $api = '') {
+  if ($module == 'feeds' && $api == 'feeds_importer_default') {
+    return array('version' => 1);
+  }
+}

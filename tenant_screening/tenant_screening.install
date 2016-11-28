@@ -1,0 +1,124 @@
+<?php
+/**
+ * @file
+ * Tenant Screening Advice Module installation
+ */
+
+/**
+ * Implements hook_install().
+ */
+function tenant_screening_install() {
+  // Set default variables.
+  variable_set('tenant_screening_feed_url', "http://www.american-apartment-owners-association.org/property-management/tenant-screening/feed/");
+
+
+  // Get localization function for installation as t() may be unavailable.
+  $t = get_t();
+
+  // Give user feedback.
+  drupal_set_message($t('Tenant Screening Advice variables created.'));
+
+  // Content type definition.
+  $content_type = array(
+    'type' => 'tenant_screening',
+    'name' => $t('Tenant Screening Advice'),
+    'description' => $t('Tenant Screening Advice that is pulled from RSS Feed.'),
+    'title_label' => $t('Tenant Screening'),
+    'base' => 'node_content',
+    'custom' => TRUE,
+  );
+
+  // Set remaining definitions with defaults.
+  $node_type = node_type_set_defaults($content_type);
+
+  // Save the content type.
+  node_type_save($node_type);
+
+  // Add a field for the body.
+  node_add_body_field($node_type, $t('Tenant Screening Advice Content'));
+
+  // Create field(s)
+  $fields = array();
+
+  $fields['tenant_screening_source'] = array(
+    'field_name' => 'tenant_screening_source',
+    'type' => 'text',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+  );
+
+
+  foreach ($fields as $field) {
+    field_create_field($field);
+  }
+
+  // Create Field Instances.
+  $instances = array();
+
+  $instances['tenant_screening_source'] = array(
+    'field_name' => 'tenant_screening_source',
+    'label' => $t('Advice Source URL'),
+    'description' => $t('Original Article source'),
+    'widget' => array(
+      'type' => 'text_textfield',
+    ),
+    'settings' => array(
+      'text_processing' => 0,
+    ),
+    'display' => array(
+      'default' => array(
+        'type' => 'hidden',
+      ),
+    ),
+  );
+
+
+  foreach ($instances as $instance) {
+    $instance['entity_type'] = 'node';
+    $instance['bundle'] = 'tenant_screening';
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function tenant_screening_uninstall() {
+  // Delete variables.
+  variable_del('tenant_screening_feed_url');
+
+
+  // Inform the user of the removal.
+  $t = get_t();
+  drupal_set_message($t('Tenant Screening Advice variables removed.'));
+
+  // Get all node IDs with screening content type.
+  $sql_query  = 'SELECT nid ';
+  $sql_query .= 'FROM {node} ';
+  $sql_query .= 'WHERE {node}.type = :type ';
+  $result = db_query($sql_query, array(':type' => 'tenant_screening'));
+
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+
+  // Delete all tenant screening advice content.
+  node_delete_multiple($nids);
+  drupal_set_message($t('Tenant Screening Advice content removed.'));
+
+  // Remove all fields and field instances.
+  foreach (field_info_instances('node', 'tenant_screening') as $field_name => $instance) {
+    field_delete_field($field_name);
+    field_delete_instance($instance);
+  }
+  drupal_set_message($t('Tenant Screening Advice field and field instances removed.'));
+
+  // Delete the content type.
+  node_type_delete('tenant_screening');
+  drupal_set_message($t('Tenant Screening Advice Content Type removed.'));
+
+  // Clean up deleted fields.
+  field_purge_batch(1000);
+}
